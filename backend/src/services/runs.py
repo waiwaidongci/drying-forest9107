@@ -6,6 +6,7 @@ from ..models.run import Run
 from ..utils.serialization import row,now
 from .sources import source_or_404,list_records
 from .domain_validation import validate_parameters
+from .purge import purged_references
 from .audit import log
 queue=Redis.from_url(REDIS_URL)
 def get_run(db,id):
@@ -13,7 +14,9 @@ def get_run(db,id):
     if not r:raise HTTPException(404,'未找到分析任务')
     return r
 def create_run(db,user,data):
-    s=source_or_404(db,data.source_id);records=list_records(db,s.id)
+    s=source_or_404(db,data.source_id)
+    blocked=purged_references(db)
+    records=[r for r in list_records(db,s.id) if r['reference'] not in blocked]
     if len(records)<3:raise HTTPException(422,'至少录入3条样本后才能执行')
     try: params=validate_parameters(data.parameters)
     except ValueError as e:raise HTTPException(422,str(e))

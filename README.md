@@ -13,7 +13,16 @@ RandomForest回归、训练内特征子集交叉验证与留出集MAE。为槐�
 3. 分析配置：冻结来源、参数和全部样本，进入Redis队列。
 4. 完整结果：真实算法摘要、专属诊断、全部CSV导出和可恢复失败态。
 5. 工艺试验备忘：分析师草案→负责人批准→阅读者下载批准快照。
-6. 审计：登录、来源修改、任务worker完成、业务说明批准等事件。
+6. 试件清除：误混保密试件按编号追溯清除，状态机与副本去向核对。
+7. 审计：登录、来源修改、任务worker完成、业务说明批准等事件。
+
+## 试件清除（保密合规）
+
+误混的保密试件由负责人在“试件清除”页按试件编号发起清除。清除任务先写入 `specimen_purges` 作为永久墓碑，再追溯全部副本：来源样本、研究冻结输入（任务快照）、研究结果与 `/artifacts` 结果文件、已批准工艺备忘的冻结结果。受影响研究与备忘立即置为 `invalidated`，原始数值移除、仅保留无数值的失效说明，查看与下载随即拒绝；其他试件不受影响，重新分析仅用剩余试件。
+
+- 清除期间：并发新建研究不会把该编号冻结进快照；worker 完成时以原子状态切换落库，已失效任务的计算结果直接丢弃；此后重复导入（含演示 seed）一律 409/跳过。
+- 已发起但未传完的流式下载会被登记并终止；存在未终止下载时清除保持 `purging`，页面展示未清完副本的去向与原因。
+- 数据库删除先提交，结果文件删除可断点恢复；`POST /purges/{id}/retry` 全量重扫、不遗漏副本。仅当核对全部副本消失后，任务才从“清除中”转为“已完成”；该编号永久禁止重新导入。
 
 ## 快速启动
 
@@ -103,6 +112,6 @@ backend/migrations/001_initial.sql
 | DATABASE_URL / REDIS_URL | Compose内部连接，定义在compose的env锚点 |
 | ARTIFACT_DIR | `/artifacts`，后端worker共享 |
 
-共享枚举：`backend/src/constants/enums.py` 与 `frontend/src/constants/enums.js` 都定义 admin/analyst/viewer、queued/running/completed/failed、draft/approved。后端service检查对应字符串；README为全量值说明。共享前端组件table/status/chart/business跨总览、结果、配置与复核复用；actions hook和format utils负责交互/格式。后端errors与rate_limit是两个中间件。
+共享枚举：`backend/src/constants/enums.py` 与 `frontend/src/constants/enums.js` 都定义 admin/analyst/viewer、queued/running/completed/failed/invalidated、draft/approved/invalidated、purging/completed。后端service检查对应字符串；README为全量值说明。共享前端组件table/status/chart/business跨总览、结果、配置与复核复用；actions hook和format utils负责交互/格式。后端errors与rate_limit是两个中间件。
 
 测试及截图在批根 `test-artifacts/gb-0044/`，不混入源码。独立算法oracle、HTTP完整流程和真实Playwright浏览器流程见该目录 `TESTING.md`。License：MIT。

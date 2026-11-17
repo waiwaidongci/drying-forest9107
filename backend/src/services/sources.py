@@ -6,6 +6,7 @@ from ..models.record import Record
 from ..utils.serialization import row
 from .audit import log
 from .domain_validation import validate_record
+from .purge import purged_references
 def list_sources(db):
     rows=[]
     for s in db.scalars(select(Source).order_by(Source.id)):
@@ -24,8 +25,10 @@ def list_records(db,id):
     return [row(x) for x in db.scalars(select(Record).where(Record.source_id==id).order_by(Record.id))]
 def add_records(db,user,id,data):
     source_or_404(db,id)
+    blocked=purged_references(db)
     validated=[];refs=set()
     for r in data.records:
+        if r.reference in blocked:raise HTTPException(409,'样本编号已列入保密清除，禁止重新导入：'+r.reference)
         if r.reference in refs:raise HTTPException(422,'批内样本编号重复')
         refs.add(r.reference)
         try: values=validate_record(r.values)

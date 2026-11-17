@@ -11,6 +11,7 @@ from src.utils.security import hash_password
 from src.utils.serialization import now
 from src.services.runs import queue
 from src.services.domain_validation import validate_record
+from src.services.purge import purged_references
 
 def seed_values(kind,index,batch,rng):
     if kind=='gaussian':
@@ -35,6 +36,7 @@ def counts(db):
 def seed():
     Base.metadata.create_all(engine);rng=random.Random(42);queued=[]
     with Session() as db:
+        blocked=purged_references(db)
         for role in ('admin','analyst','viewer'):
             email=role+'@'+CONFIG['slug']+'.demo'
             if not db.scalar(select(User).where(User.email==email)):db.add(User(email=email,password_hash=hash_password('Research2026!'),role=role))
@@ -45,6 +47,7 @@ def seed():
                 source=Source(key=key,name=key+' '+['秋季常规组','复测对照组','工艺观察组'][batch],filename=CONFIG['slug']+f'-202611-{batch+1:02}.csv',description=CONFIG['scenario']);db.add(source);db.flush()
             for index in range(CONFIG['seed_count']):
                 reference=key+f'-{index+1:04}'
+                if reference in blocked:continue
                 vals=seed_values(CONFIG['algorithm'],index,batch,rng)
                 if not db.scalar(select(Record.id).where(Record.source_id==source.id,Record.reference==reference)):
                     db.add(Record(source_id=source.id,reference=reference,values=validate_record(vals)))
